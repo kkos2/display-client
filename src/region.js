@@ -59,7 +59,7 @@ function Region({ region }) {
   function slideDone(slide) {
     const nextSlideAndIndex = findNextSlide(slide.executionId);
 
-    if (nextSlideAndIndex.nextIndex === 0 && Array.isArray(newSlides)) {
+    if (nextSlideAndIndex.nextIndex === 0 && Array.isArray(newSlides) && newSlides.length > 0) {
       const nextSlides = [...newSlides];
       setSlides(nextSlides);
       setNewSlides(null);
