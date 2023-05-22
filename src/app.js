@@ -263,6 +263,54 @@ function App() {
     });
   };
 
+  const preventSleep = () => {
+    const handle = {
+      sentinel: null,
+    };
+
+    // Check if wake lock is supported by the browser.
+    if (!navigator || !navigator.wakeLock || !navigator.wakeLock.request) {
+      Logger.log(
+        'info',
+        'Wake Lock (https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API) is not available, will not be able to prevent the screen from going to sleep.'
+      );
+      return handle;
+    }
+
+    try {
+      // Request the wake lock, then update the handle when we know whether
+      // or not we got it.
+      navigator.wakeLock
+        .request('screen')
+        .then((sentinel) => {
+          handle.sentinel = sentinel;
+          Logger.log('info', 'Got Wake Lock, the screen will not go to sleep');
+
+          sentinel.addEventListener('release', () => {
+            Logger.log(
+              'info',
+              'Wake Lock was released, the screen may now go to sleep. This can happen when the browser looses focus'
+            );
+          });
+        })
+        .catch((err) => {
+          Logger.error(
+            'Attempt to get Wake Lock to prevent the screen from going to sleep failed, you may have to reload in order to properly avoid the screen going to sleep.',
+            err
+          );
+        });
+    } catch (err) {
+      Logger.error(
+        'Unexpected error occurred while getting a Wake Lock  to prevent the screen from going to sleep failed, you may have to reload in order to properly avoid the screen going to sleep',
+        err
+      );
+    }
+
+    // Return a handle straight away. The handle will asynchronously be updated
+    // with the sentinel when it is available.
+    return handle;
+  };
+
   const contentEmpty = () => {
     Logger.log('info', 'Content empty. Displaying fallback.');
     setFallbackImageUrl(localStorage.getItem(localStorageKeys.FALLBACK_IMAGE));
@@ -310,6 +358,8 @@ function App() {
 
     refreshLogin();
 
+    const wakeLockHandle = preventSleep();
+
     checkForUpdates();
     releaseTimestampIntervalRef.current = setInterval(
       checkForUpdates,
@@ -323,6 +373,16 @@ function App() {
       document.removeEventListener('reauthenticate', reauthenticateHandler);
       document.removeEventListener('contentEmpty', contentEmpty);
       document.removeEventListener('contentNotEmpty', contentNotEmpty);
+
+      // Clear out our wake lock as well as possible.
+      if (
+        wakeLockHandle.sentinel !== null &&
+        wakeLockHandle.sentinel.released !== true
+      ) {
+        wakeLockHandle.sentinel.release().then(() => {
+          Logger.log('info', 'cleanup: Wake Lock released.');
+        });
+      }
 
       if (timeoutRef?.current) {
         clearTimeout(timeoutRef.current);
